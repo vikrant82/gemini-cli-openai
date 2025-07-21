@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { Env } from "../types";
 import { AuthManager } from "../auth";
 import { GeminiApiClient } from "../gemini-client";
+import { ConfigManager } from "../config-manager";
 
 /**
  * Debug and testing routes for troubleshooting authentication and API functionality.
@@ -61,6 +62,26 @@ DebugRoute.post("/token-test", async (c) => {
 				status: "error",
 				message: errorMessage
 				// Removed stack trace for security
+			},
+			500
+		);
+	}
+});
+
+// Stats endpoint
+DebugRoute.get("/stats", async (c) => {
+	try {
+		const configManager = ConfigManager.getInstance(c.env);
+		return c.json({
+			status: "ok",
+			requests_since_last_config_update: configManager.requestCount
+		});
+	} catch (e: unknown) {
+		const errorMessage = e instanceof Error ? e.message : String(e);
+		return c.json(
+			{
+				status: "error",
+				message: errorMessage
 			},
 			500
 		);

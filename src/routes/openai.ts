@@ -6,6 +6,7 @@ import { DEFAULT_THINKING_BUDGET } from "../constants";
 import { AuthManager } from "../auth";
 import { GeminiApiClient } from "../gemini-client";
 import { createOpenAIStreamTransformer } from "../stream-transformer";
+import { ConfigManager } from "../config-manager";
 
 /**
  * OpenAI-compatible API routes for models and chat completions.
@@ -142,8 +143,12 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 		});
 
 		// Initialize services
+		const configManager = ConfigManager.getInstance(c.env);
 		const authManager = new AuthManager(c.env);
 		const geminiClient = new GeminiApiClient(c.env, authManager);
+
+		// Increment request count
+		configManager.requestCount++;
 
 		// Test authentication first
 		try {

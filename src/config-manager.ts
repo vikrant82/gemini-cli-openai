@@ -4,6 +4,7 @@ export class ConfigManager {
     private static instance: ConfigManager;
     private gcpServiceAccount: string;
     private initialized = false;
+    public requestCount = 0;
 
     private constructor(private env: Env) {
         this.gcpServiceAccount = env.GCP_SERVICE_ACCOUNT;
@@ -34,5 +35,6 @@ export class ConfigManager {
 
     public setGcpServiceAccount(gcpServiceAccount: string): void {
         this.gcpServiceAccount = gcpServiceAccount;
+        this.requestCount = 0;
     }
 }
