@@ -1,4 +1,5 @@
 import { Env, OAuth2Credentials } from "./types";
+import { ConfigManager } from "./config-manager";
 import {
 	CODE_ASSIST_ENDPOINT,
 	CODE_ASSIST_API_VERSION,
@@ -47,8 +48,11 @@ export class AuthManager {
 	 * Initializes authentication using OAuth2 credentials with KV storage caching.
 	 */
 	public async initializeAuth(): Promise<void> {
-		if (!this.env.GCP_SERVICE_ACCOUNT) {
-			throw new Error("`GCP_SERVICE_ACCOUNT` environment variable not set. Please provide OAuth2 credentials JSON.");
+		const configManager = ConfigManager.getInstance(this.env);
+		const gcpServiceAccount = configManager.getGcpServiceAccount();
+
+		if (!gcpServiceAccount) {
+			throw new Error("`GCP_SERVICE_ACCOUNT` is not set.");
 		}
 
 		try {
@@ -77,7 +81,7 @@ export class AuthManager {
 			}
 
 			// Parse original credentials from environment
-			const oauth2Creds: OAuth2Credentials = JSON.parse(this.env.GCP_SERVICE_ACCOUNT);
+			const oauth2Creds: OAuth2Credentials = JSON.parse(gcpServiceAccount);
 
 			// Check if the original token is still valid
 			const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
