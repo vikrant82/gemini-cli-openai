@@ -1,5 +1,44 @@
 # Changelog
 
+## Per-Key Credentials and Multi-User Support
+
+This major update refactors the application to support multiple users, each with their own API key and `GCP_SERVICE_ACCOUNT` credentials. This provides a more secure and scalable solution for multi-user environments.
+
+### New Features
+
+-   **Per-Key Credentials:** The application now associates each `OPENAI_API_KEY` with its own `GCP_SERVICE_ACCOUNT` configuration.
+-   **Two-Tiered Authentication:**
+    -   A `MASTER_API_KEY` (set in `.dev.vars`) is now used to protect the `/v1/config/update` endpoint.
+    -   User-specific `OPENAI_API_KEY`s are used to authenticate with all other endpoints.
+-   **User Self-Registration:** Users can register their own API keys and credentials by sending a `POST` request to the `/v1/config/update` endpoint, authenticated with the `MASTER_API_KEY`.
+-   **KV Store for User Data:** All user-specific data, including configurations and access tokens, is now stored in the Cloudflare KV store, scoped by the user's API key.
+
+### How to Use
+
+To register or update a user's configuration, send a `POST` request to the `/v1/config/update` endpoint.
+
+**Example `curl` command:**
+
+```bash
+curl --request POST \
+  --url http://localhost:8787/v1/config/update \
+  --header 'Authorization: Bearer <your_master_api_key>' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "apiKey": "<the_users_new_api_key>",
+    "gcpServiceAccount": {
+        "access_token": "...",
+        "refresh_token": "...",
+        "scope": "...",
+        "token_type": "...",
+        "id_token": "...",
+        "expiry_date": ...
+    }
+}'
+```
+
+After registering, the user can use their personal API key (`<the_users_new_api_key>`) to access all other endpoints.
+
 ## Dynamic Configuration of GCP_SERVICE_ACCOUNT
 
 This update introduces a new feature that allows for dynamic configuration of the `GCP_SERVICE_ACCOUNT` without needing to restart the application. This is particularly useful for scenarios where you need to switch service accounts on the fly, for example, to handle API rate limits.
