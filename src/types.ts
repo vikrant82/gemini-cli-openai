@@ -1,5 +1,3 @@
-import { ConfigManager } from "./config-manager";
-
 // --- Safety Threshold Types ---
 export type SafetyThreshold =
 	| "BLOCK_NONE"
@@ -12,9 +10,9 @@ export type SafetyThreshold =
 export interface Env {
 	GCP_SERVICE_ACCOUNT: string; // Now contains OAuth2 credentials JSON
 	GEMINI_PROJECT_ID?: string;
-	configManager: ConfigManager;
 	GEMINI_CLI_KV: KVNamespace; // Cloudflare KV for token caching
 	OPENAI_API_KEY?: string; // Optional API key for authentication
+	MASTER_API_KEY?: string;
 	ENABLE_FAKE_THINKING?: string; // Optional flag to enable fake thinking output (set to "true" to enable)
 	ENABLE_REAL_THINKING?: string; // Optional flag to enable real Gemini thinking output (set to "true" to enable)
 	STREAM_THINKING_AS_CONTENT?: string; // Optional flag to stream thinking as content with <thinking> tags (set to "true" to enable)

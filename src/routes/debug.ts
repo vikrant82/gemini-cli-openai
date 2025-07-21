@@ -2,17 +2,18 @@ import { Hono } from "hono";
 import { Env } from "../types";
 import { AuthManager } from "../auth";
 import { GeminiApiClient } from "../gemini-client";
-import { ConfigManager } from "../config-manager";
+import { UserConfigManager } from "../user-config-manager";
 
 /**
  * Debug and testing routes for troubleshooting authentication and API functionality.
  */
-export const DebugRoute = new Hono<{ Bindings: Env }>();
+export const DebugRoute = new Hono<{ Bindings: Env; Variables: { apiKey: string } }>();
 
 // Check KV cache status
 DebugRoute.get("/cache", async (c) => {
 	try {
-		const authManager = new AuthManager(c.env);
+		const apiKey = c.get("apiKey");
+		const authManager = new AuthManager(c.env, apiKey);
 		const cacheInfo = await authManager.getCachedTokenInfo();
 
 		// Remove sensitive information from the response
@@ -44,7 +45,8 @@ DebugRoute.get("/cache", async (c) => {
 DebugRoute.post("/token-test", async (c) => {
 	try {
 		console.log("Token test endpoint called");
-		const authManager = new AuthManager(c.env);
+		const apiKey = c.get("apiKey");
+		const authManager = new AuthManager(c.env, apiKey);
 
 		// Test authentication only
 		await authManager.initializeAuth();
@@ -71,10 +73,13 @@ DebugRoute.post("/token-test", async (c) => {
 // Stats endpoint
 DebugRoute.get("/stats", async (c) => {
 	try {
-		const configManager = ConfigManager.getInstance(c.env);
+		const apiKey = c.get("apiKey");
+		const userConfigManager = new UserConfigManager(c.env, apiKey);
+		const userConfig = await userConfigManager.getConfig();
+
 		return c.json({
 			status: "ok",
-			requests_since_last_config_update: configManager.requestCount
+			requests_since_last_config_update: userConfig?.requestCount ?? 0
 		});
 	} catch (e: unknown) {
 		const errorMessage = e instanceof Error ? e.message : String(e);
@@ -92,7 +97,8 @@ DebugRoute.get("/stats", async (c) => {
 DebugRoute.post("/test", async (c) => {
 	try {
 		console.log("Test endpoint called");
-		const authManager = new AuthManager(c.env);
+		const apiKey = c.get("apiKey");
+		const authManager = new AuthManager(c.env, apiKey);
 		const geminiClient = new GeminiApiClient(c.env, authManager);
 
 		// Test authentication

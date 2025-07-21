@@ -1,26 +1,32 @@
 import { Hono } from "hono";
 import { Env } from "../types";
-import { ConfigManager } from "../config-manager";
+import { UserConfigManager } from "../user-config-manager";
 import { AuthManager } from "../auth";
 
 export const ConfigRoute = new Hono<{ Bindings: Env }>();
 
 ConfigRoute.post("/config/update", async (c) => {
-    const configManager = ConfigManager.getInstance(c.env);
-    const authManager = new AuthManager(c.env);
+	const body = await c.req.json();
+	const { apiKey, gcpServiceAccount } = body;
 
-    const body = await c.req.json();
-    const newGcpServiceAccount = JSON.stringify(body);
+	if (!apiKey || !gcpServiceAccount) {
+		return c.json({ error: "The request body must contain 'apiKey' and 'gcpServiceAccount' properties" }, 400);
+	}
 
-    if (!body.access_token || !body.refresh_token) {
-        return c.json({ error: "The request body must be a valid GCP service account JSON" }, 400);
-    }
+	const newGcpServiceAccount = JSON.stringify(gcpServiceAccount);
 
-    configManager.setGcpServiceAccount(newGcpServiceAccount);
-    await authManager.clearTokenCache();
+	if (!gcpServiceAccount.access_token || !gcpServiceAccount.refresh_token) {
+		return c.json({ error: "The 'gcpServiceAccount' property must be a valid GCP service account JSON" }, 400);
+	}
 
-    // Persist the new configuration in KV store
-    await c.env.GEMINI_CLI_KV.put("GCP_SERVICE_ACCOUNT_CONFIG", newGcpServiceAccount);
+	const userConfigManager = new UserConfigManager(c.env, apiKey);
+	const authManager = new AuthManager(c.env, apiKey);
 
-    return c.json({ message: "Configuration updated and persisted successfully" });
+	await userConfigManager.setConfig({
+		gcpServiceAccount: newGcpServiceAccount,
+		requestCount: 0
+	});
+	await authManager.clearTokenCache();
+
+	return c.json({ message: `Configuration for API key '${apiKey}' updated successfully` });
 });

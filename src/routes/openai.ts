@@ -6,12 +6,12 @@ import { DEFAULT_THINKING_BUDGET } from "../constants";
 import { AuthManager } from "../auth";
 import { GeminiApiClient } from "../gemini-client";
 import { createOpenAIStreamTransformer } from "../stream-transformer";
-import { ConfigManager } from "../config-manager";
+import { UserConfigManager } from "../user-config-manager";
 
 /**
  * OpenAI-compatible API routes for models and chat completions.
  */
-export const OpenAIRoute = new Hono<{ Bindings: Env }>();
+export const OpenAIRoute = new Hono<{ Bindings: Env; Variables: { apiKey: string } }>();
 
 // List available models
 OpenAIRoute.get("/models", async (c) => {
@@ -143,12 +143,13 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 		});
 
 		// Initialize services
-		const configManager = ConfigManager.getInstance(c.env);
-		const authManager = new AuthManager(c.env);
+		const apiKey = c.get("apiKey");
+		const userConfigManager = new UserConfigManager(c.env, apiKey);
+		const authManager = new AuthManager(c.env, apiKey);
 		const geminiClient = new GeminiApiClient(c.env, authManager);
 
 		// Increment request count
-		configManager.requestCount++;
+		await userConfigManager.incrementRequestCount();
 
 		// Test authentication first
 		try {

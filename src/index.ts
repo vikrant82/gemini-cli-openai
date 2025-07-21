@@ -3,8 +3,7 @@ import { Env } from "./types";
 import { OpenAIRoute } from "./routes/openai";
 import { DebugRoute } from "./routes/debug";
 import { ConfigRoute } from "./routes/config";
-import { ConfigManager } from "./config-manager";
-import { openAIApiKeyAuth } from "./middlewares/auth";
+import { userApiKeyAuth, masterApiKeyAuth } from "./middlewares/auth";
 import { loggingMiddleware } from "./middlewares/logging";
 
 /**
@@ -22,14 +21,7 @@ import { loggingMiddleware } from "./middlewares/logging";
  */
 
 // Create the main Hono app
-const app = new Hono<{ Bindings: Env }>();
-
-// Initialize the ConfigManager
-app.use("*", async (c, next) => {
-	const configManager = ConfigManager.getInstance(c.env);
-	await configManager.initialize();
-	await next();
-});
+const app = new Hono<{ Bindings: Env; Variables: { apiKey: string } }>();
 
 // Add logging middleware
 app.use("*", loggingMiddleware);
@@ -50,16 +42,19 @@ app.use("*", async (c, next) => {
 	await next();
 });
 
-// Apply OpenAI API key authentication middleware to all /v1 routes
-app.use("/v1/*", openAIApiKeyAuth);
+// Apply master API key authentication ONLY to the config update route
+app.use("/v1/config/update", masterApiKeyAuth);
+
+// Apply user API key authentication to all other /v1 routes
+app.use("/v1/chat/completions", userApiKeyAuth);
+app.use("/v1/models", userApiKeyAuth);
+app.use("/v1/debug/*", userApiKeyAuth);
+
 
 // Setup route handlers
 app.route("/v1", OpenAIRoute);
 app.route("/v1/debug", DebugRoute);
 app.route("/v1", ConfigRoute);
-
-// Add individual debug routes to main app for backward compatibility
-app.route("/v1", DebugRoute);
 
 // Root endpoint - basic info about the service
 app.get("/", (c) => {
