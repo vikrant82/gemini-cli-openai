@@ -15,6 +15,20 @@ export const loggingMiddleware = async (c: Context<{ Bindings: Env }>, next: Nex
 	const startTime = Date.now();
 	const timestamp = new Date().toISOString();
 
+	// Mask Authorization header
+	let authLog = "";
+	const authHeader = c.req.header("Authorization");
+	if (authHeader) {
+		if (authHeader.startsWith("Bearer ")) {
+			const key = authHeader.substring(7);
+			const maskedKey = key.length > 8 ? `${key.substring(0, 4)}...${key.substring(key.length - 4)}` : "***";
+			authLog = ` - Auth: Bearer ${maskedKey}`;
+		} else {
+			authLog = " - Auth: [Non-Bearer]";
+		}
+	}
+
+
 	// Log request body for POST/PUT/PATCH requests
 	let bodyLog = "";
 	if (["POST", "PUT", "PATCH"].includes(method)) {
@@ -33,7 +47,7 @@ export const loggingMiddleware = async (c: Context<{ Bindings: Env }>, next: Nex
 		}
 	}
 
-	console.log(`[${timestamp}] ${method} ${path}${bodyLog} - Request started`);
+	console.log(`[${timestamp}] ${method} ${path}${authLog}${bodyLog} - Request started`);
 
 	await next();
 

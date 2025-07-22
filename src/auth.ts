@@ -7,7 +7,6 @@ import {
 	OAUTH_CLIENT_SECRET,
 	OAUTH_REFRESH_URL,
 	TOKEN_BUFFER_TIME,
-	KV_TOKEN_KEY
 } from "./config";
 
 // Auth-related interfaces
@@ -40,6 +39,7 @@ export class AuthManager {
 	private env: Env;
 	private apiKey: string;
 	private accessToken: string | null = null;
+	private currentCredentialIndex: number = 0;
 
 	constructor(env: Env, apiKey: string) {
 		this.env = env;
@@ -53,27 +53,33 @@ export class AuthManager {
 		const userConfigManager = new UserConfigManager(this.env, this.apiKey);
 		const userConfig = await userConfigManager.getConfig();
 
-		if (!userConfig || !userConfig.gcpServiceAccount) {
-			throw new Error("`GCP_SERVICE_ACCOUNT` is not configured for this API key.");
+		if (!userConfig || !userConfig.gcpServiceAccounts || userConfig.gcpServiceAccounts.length === 0) {
+			throw new Error("`GCP_SERVICE_ACCOUNTS` is not configured for this API key.");
 		}
 
-		const gcpServiceAccount = userConfig.gcpServiceAccount;
+		this.currentCredentialIndex = userConfig.currentCredentialIndex;
+		const gcpServiceAccountJSON = userConfig.gcpServiceAccounts[this.currentCredentialIndex];
+
+		if (!gcpServiceAccountJSON) {
+			throw new Error(`No GCP service account found at index ${this.currentCredentialIndex}.`);
+		}
+
+		console.log(`Using credential at index: ${this.currentCredentialIndex}`);
 
 		try {
-			// First, try to get a cached token from KV storage
+			const cacheKey = `token:${this.apiKey}:${this.currentCredentialIndex}`;
 			let cachedTokenData = null;
 
 			try {
-				const cachedToken = await this.env.GEMINI_CLI_KV.get(`token:${this.apiKey}`, "json");
+				const cachedToken = await this.env.GEMINI_CLI_KV.get(cacheKey, "json");
 				if (cachedToken) {
 					cachedTokenData = cachedToken as CachedTokenData;
-					console.log("Found cached token in KV storage");
+					console.log(`Found cached token in KV storage for index ${this.currentCredentialIndex}`);
 				}
 			} catch (kvError) {
-				console.log("No cached token found in KV storage or KV error:", kvError);
+				console.log(`No cached token found in KV storage for index ${this.currentCredentialIndex} or KV error:`, kvError);
 			}
 
-			// Check if cached token is still valid (with buffer)
 			if (cachedTokenData) {
 				const timeUntilExpiry = cachedTokenData.expiry_date - Date.now();
 				if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
@@ -84,22 +90,18 @@ export class AuthManager {
 				console.log("Cached token expired or expiring soon");
 			}
 
-			// Parse original credentials from environment
-			const oauth2Creds: OAuth2Credentials = JSON.parse(gcpServiceAccount);
+			const oauth2Creds: OAuth2Credentials = JSON.parse(gcpServiceAccountJSON);
 
-			// Check if the original token is still valid
-			const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
-			if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
-				// Original token is still valid, cache it and use it
-				this.accessToken = oauth2Creds.access_token;
-				console.log(`Original token is valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
-
-				// Cache the token in KV storage
-				await this.cacheTokenInKV(oauth2Creds.access_token, oauth2Creds.expiry_date);
-				return;
+			if (oauth2Creds.expiry_date && oauth2Creds.access_token) {
+				const timeUntilExpiry = oauth2Creds.expiry_date - Date.now();
+				if (timeUntilExpiry > TOKEN_BUFFER_TIME) {
+					this.accessToken = oauth2Creds.access_token;
+					console.log(`Original token is valid for ${Math.floor(timeUntilExpiry / 1000)} more seconds`);
+					await this.cacheTokenInKV(oauth2Creds.access_token, oauth2Creds.expiry_date);
+					return;
+				}
 			}
 
-			// Both original and cached tokens are expired, refresh the token
 			console.log("All tokens expired, refreshing...");
 			await this.refreshAndCacheToken(oauth2Creds.refresh_token);
 		} catch (e: unknown) {
@@ -136,14 +138,11 @@ export class AuthManager {
 
 		const refreshData = (await refreshResponse.json()) as TokenRefreshResponse;
 		this.accessToken = refreshData.access_token;
-
-		// Calculate expiry time (typically 1 hour from now)
 		const expiryTime = Date.now() + refreshData.expires_in * 1000;
 
 		console.log("Token refreshed successfully");
 		console.log(`New token expires in ${refreshData.expires_in} seconds`);
 
-		// Cache the new token in KV storage
 		await this.cacheTokenInKV(refreshData.access_token, expiryTime);
 	}
 
@@ -158,30 +157,31 @@ export class AuthManager {
 				cached_at: Date.now()
 			};
 
-			// Cache for slightly less than the token expiry to be safe
-			const ttlSeconds = Math.floor((expiryDate - Date.now()) / 1000) - 300; // 5 minutes buffer
+			const ttlSeconds = Math.floor((expiryDate - Date.now()) / 1000) - 300;
+			const cacheKey = `token:${this.apiKey}:${this.currentCredentialIndex}`;
 
 			if (ttlSeconds > 0) {
-				await this.env.GEMINI_CLI_KV.put(`token:${this.apiKey}`, JSON.stringify(tokenData), {
+				await this.env.GEMINI_CLI_KV.put(cacheKey, JSON.stringify(tokenData), {
 					expirationTtl: ttlSeconds
 				});
-				console.log(`Token cached in KV storage with TTL of ${ttlSeconds} seconds`);
+				console.log(`Token cached in KV storage for index ${this.currentCredentialIndex} with TTL of ${ttlSeconds} seconds`);
 			} else {
 				console.log("Token expires too soon, not caching in KV");
 			}
 		} catch (kvError) {
 			console.error("Failed to cache token in KV storage:", kvError);
-			// Don't throw an error here as the token is still valid, just not cached
 		}
 	}
 
 	/**
 	 * Clear cached token from KV storage.
 	 */
-	public async clearTokenCache(): Promise<void> {
+	public async clearTokenCache(index?: number): Promise<void> {
+		const indexToClear = index ?? this.currentCredentialIndex;
+		const cacheKey = `token:${this.apiKey}:${indexToClear}`;
 		try {
-			await this.env.GEMINI_CLI_KV.delete(`token:${this.apiKey}`);
-			console.log("Cleared cached token from KV storage");
+			await this.env.GEMINI_CLI_KV.delete(cacheKey);
+			console.log(`Cleared cached token from KV storage for index ${indexToClear}`);
 		} catch (kvError) {
 			console.log("Error clearing KV cache:", kvError);
 		}
@@ -191,8 +191,9 @@ export class AuthManager {
 	 * Get cached token info from KV storage.
 	 */
 	public async getCachedTokenInfo(): Promise<TokenCacheInfo> {
+		const cacheKey = `token:${this.apiKey}:${this.currentCredentialIndex}`;
 		try {
-			const cachedToken = await this.env.GEMINI_CLI_KV.get(`token:${this.apiKey}`, "json");
+			const cachedToken = await this.env.GEMINI_CLI_KV.get(cacheKey, "json");
 			if (cachedToken) {
 				const tokenData = cachedToken as CachedTokenData;
 				const timeUntilExpiry = tokenData.expiry_date - Date.now();
@@ -203,7 +204,6 @@ export class AuthManager {
 					expires_at: new Date(tokenData.expiry_date).toISOString(),
 					time_until_expiry_seconds: Math.floor(timeUntilExpiry / 1000),
 					is_expired: timeUntilExpiry < 0
-					// Removed token_preview for security
 				};
 			}
 			return { cached: false, message: "No token found in cache" };
@@ -231,10 +231,10 @@ export class AuthManager {
 		if (!response.ok) {
 			if (response.status === 401 && !isRetry) {
 				console.log("Got 401 error, clearing token cache and retrying...");
-				this.accessToken = null; // Clear cached token
-				await this.clearTokenCache(); // Clear KV cache
-				await this.initializeAuth(); // This will refresh the token
-				return this.callEndpoint(method, body, true); // Retry once
+				this.accessToken = null;
+				await this.clearTokenCache();
+				await this.initializeAuth();
+				return this.callEndpoint(method, body, true);
 			}
 			const errorText = await response.text();
 			throw new Error(`API call failed with status ${response.status}: ${errorText}`);
@@ -248,5 +248,28 @@ export class AuthManager {
 	 */
 	public getAccessToken(): string | null {
 		return this.accessToken;
+	}
+
+	/**
+	 * Rotate to the next available credential.
+	 */
+	public async rotateCredentials(): Promise<void> {
+		const userConfigManager = new UserConfigManager(this.env, this.apiKey);
+		const userConfig = await userConfigManager.getConfig();
+
+		if (!userConfig || !userConfig.gcpServiceAccounts || userConfig.gcpServiceAccounts.length === 0) {
+			throw new Error("Cannot rotate credentials, no configuration found.");
+		}
+
+		const activeCredentials = userConfig.gcpServiceAccounts.filter(c => c !== null);
+		if (activeCredentials.length === 0) {
+			throw new Error("Cannot rotate credentials, no active credentials found.");
+		}
+
+		userConfig.currentCredentialIndex = (userConfig.currentCredentialIndex + 1) % activeCredentials.length;
+		console.log(`Rotating credentials. New index: ${userConfig.currentCredentialIndex}`);
+
+		await userConfigManager.setConfig(userConfig);
+		this.accessToken = null; // Force re-authentication
 	}
 }

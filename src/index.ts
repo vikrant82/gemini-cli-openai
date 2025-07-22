@@ -44,6 +44,7 @@ app.use("*", async (c, next) => {
 
 // Apply master API key authentication ONLY to the config update route
 app.use("/v1/config/update", masterApiKeyAuth);
+app.use("/v1/config/rotate", masterApiKeyAuth);
 
 // Apply user API key authentication to all other /v1 routes
 app.use("/v1/chat/completions", userApiKeyAuth);

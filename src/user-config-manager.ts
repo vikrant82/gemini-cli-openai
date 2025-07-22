@@ -1,8 +1,10 @@
 import { Env } from "./types";
 
 export interface UserConfig {
-    gcpServiceAccount: string;
-    requestCount: number;
+	gcpServiceAccounts: string[];
+	currentCredentialIndex: number;
+	nextWriteIndex: number;
+	requestCount: number;
 }
 
 export class UserConfigManager {

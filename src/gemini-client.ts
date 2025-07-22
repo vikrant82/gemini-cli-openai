@@ -506,6 +506,28 @@ export class GeminiApiClient {
 				return;
 			}
 
+			if (response.status === 429 && !isRetry) {
+				console.log("Got 429 error in stream request, rotating credentials and retrying...");
+				await this.authManager.rotateCredentials();
+				await this.authManager.initializeAuth();
+				console.log("Re-authentication successful after rotation.");
+
+				// Force re-discovery of project ID for the new credential
+				this.projectId = null; // Clear the internal cache
+				const newProjectId = await this.discoverProjectId();
+				console.log(`Discovered new project ID: ${newProjectId}`);
+
+				// Create a new request object with the new project ID
+				const newStreamRequest = {
+					...(streamRequest as Record<string, unknown>),
+					project: newProjectId,
+				};
+
+				console.log("Retrying request with new project ID.");
+				yield* this.performStreamRequest(newStreamRequest, needsThinkingClose, true, realThinkingAsContent, originalModel);
+				return;
+			}
+
 			// Handle rate limiting with auto model switching
 			if (this.autoSwitchHelper.isRateLimitStatus(response.status) && !isRetry && originalModel) {
 				const fallbackModel = this.autoSwitchHelper.getFallbackModel(originalModel);

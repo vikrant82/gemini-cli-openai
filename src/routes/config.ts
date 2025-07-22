@@ -13,20 +13,47 @@ ConfigRoute.post("/config/update", async (c) => {
 		return c.json({ error: "The request body must contain 'apiKey' and 'gcpServiceAccount' properties" }, 400);
 	}
 
-	const newGcpServiceAccount = JSON.stringify(gcpServiceAccount);
-
-	if (!gcpServiceAccount.access_token || !gcpServiceAccount.refresh_token) {
-		return c.json({ error: "The 'gcpServiceAccount' property must be a valid GCP service account JSON" }, 400);
+	if (!gcpServiceAccount.refresh_token) {
+		return c.json({ error: "The 'gcpServiceAccount' property must be a valid GCP service account JSON with a refresh_token" }, 400);
 	}
 
 	const userConfigManager = new UserConfigManager(c.env, apiKey);
+	let userConfig = await userConfigManager.getConfig();
+
+	if (!userConfig) {
+		userConfig = {
+			gcpServiceAccounts: new Array(10).fill(null),
+			currentCredentialIndex: 0,
+			nextWriteIndex: 0,
+			requestCount: 0,
+		};
+	}
+
+	const writeIndex = userConfig.nextWriteIndex;
+	const newGcpServiceAccount = JSON.stringify(gcpServiceAccount);
+	userConfig.gcpServiceAccounts[writeIndex] = newGcpServiceAccount;
+	userConfig.nextWriteIndex = (writeIndex + 1) % 10;
+
+	await userConfigManager.setConfig(userConfig);
+
+	// Clear the cache for the specific credential that was updated
 	const authManager = new AuthManager(c.env, apiKey);
+	await authManager.clearTokenCache(writeIndex);
 
-	await userConfigManager.setConfig({
-		gcpServiceAccount: newGcpServiceAccount,
-		requestCount: 0
-	});
-	await authManager.clearTokenCache();
 
-	return c.json({ message: `Configuration for API key '${apiKey}' updated successfully` });
+	return c.json({ message: `Configuration for API key '${apiKey}' updated successfully at index ${writeIndex}` });
+});
+
+ConfigRoute.post("/config/rotate", async (c) => {
+	const body = await c.req.json();
+	const { apiKey } = body;
+
+	if (!apiKey) {
+		return c.json({ error: "The request body must contain 'apiKey'" }, 400);
+	}
+
+	const authManager = new AuthManager(c.env, apiKey);
+	await authManager.rotateCredentials();
+
+	return c.json({ message: `Credentials for API key '${apiKey}' rotated successfully` });
 });

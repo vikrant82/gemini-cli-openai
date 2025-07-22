@@ -1,5 +1,60 @@
 # Changelog
 
+## Automatic Credential Rotation
+
+This update introduces a robust system for rotating Google Cloud OAuth credentials to automatically handle API rate limits and improve reliability.
+
+### New Features
+
+-   **Rotating Credentials:** The application now supports a list of up to 10 rotating GCP service account credentials for each user API key.
+-   **Circular Configuration:** Credentials can be added or updated one by one via the `POST /v1/config/update` endpoint, which manages them in a circular array.
+-   **Automatic Rotation on 429 Errors:** The system will automatically rotate to the next available credential when it receives a `429 Too Many Requests` error from the Gemini API.
+-   **Manual Rotation Endpoint:** A new `POST /v1/config/rotate` endpoint has been added to allow for manual triggering of credential rotation.
+-   **Persistent State:** The current state of the credential rotation (i.e., the active index) is persisted in the Cloudflare KV store, so it's not lost on restart.
+-   **Enhanced Logging:** Added logging to show which credential is in use and when rotation occurs.
+
+### How to Use
+
+To add/update a credential, send a `POST` request to `/v1/config/update`. To manually rotate, send a `POST` request to `/v1/config/rotate`. Both endpoints are protected by the `MASTER_API_KEY`.
+
+**Example `curl` to add/update a credential:**
+
+```bash
+curl --request POST \
+  --url http://localhost:8787/v1/config/update \
+  --header 'Authorization: Bearer <your_master_api_key>' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "apiKey": "<the_users_api_key>",
+    "gcpServiceAccount": {
+        "refresh_token": "...",
+        ...
+    }
+}'
+```
+
+**Example `curl` to manually rotate credentials:**
+
+```bash
+curl --request POST \
+  --url http://localhost:8787/v1/config/rotate \
+  --header 'Authorization: Bearer <your_master_api_key>' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "apiKey": "<the_users_api_key>"
+}'
+```
+
+### File Changes
+
+-   **`src/user-config-manager.ts`**: Updated `UserConfig` to store an array of credentials and the current index.
+-   **`src/routes/config.ts`**: Modified `/v1/config/update` logic and added the new `/v1/config/rotate` endpoint.
+-   **`src/index.ts`**: Applied `masterApiKeyAuth` middleware to the new `/v1/config/rotate` route.
+-   **`src/auth.ts`**: `AuthManager` was significantly updated to handle the list of credentials, implement rotation logic, and add logging.
+-   **`src/gemini-client.ts`**: Added error handling for 429 errors to trigger automatic rotation.
+
+---
+
 ## Per-Key Credentials and Multi-User Support
 
 This major update refactors the application to support multiple users, each with their own API key and `GCP_SERVICE_ACCOUNT` credentials. This provides a more secure and scalable solution for multi-user environments.
