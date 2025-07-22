@@ -161,6 +161,13 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 			return c.json({ error: "Authentication failed: " + errorMessage }, 401);
 		}
 
+        try {
+            const projectId = await geminiClient.discoverProjectId();
+            console.log(`Using Project ID: ${projectId}`);
+        } catch (discoveryError: unknown) {
+            console.error("Failed to discover Project ID for logging:", discoveryError);
+        }
+
 		if (stream) {
 			// Streaming response
 			const { readable, writable } = new TransformStream();
