@@ -32,8 +32,8 @@ export class UserConfigManager {
     public async incrementRequestCount(index: number): Promise<void> {
         const config = await this.getConfig();
         if (config) {
-            if (!config.requestCounts) {
-                config.requestCounts = [];
+            if (!config.requestCounts || config.requestCounts.length !== config.gcpServiceAccounts.length) {
+                config.requestCounts = Array(config.gcpServiceAccounts.length).fill(0);
             }
             if (!config.totalRequests) {
                 config.totalRequests = 0;

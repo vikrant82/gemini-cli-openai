@@ -240,9 +240,6 @@ export class AuthManager {
 			throw new Error(`API call failed with status ${response.status}: ${errorText}`);
 		}
 
-		const userConfigManager = new UserConfigManager(this.env, this.apiKey);
-		await userConfigManager.incrementRequestCount(this.currentCredentialIndex);
-
 		return response.json();
 	}
 
@@ -251,6 +248,10 @@ export class AuthManager {
 	 */
 	public getAccessToken(): string | null {
 		return this.accessToken;
+	}
+
+	public getCurrentCredentialIndex(): number {
+		return this.currentCredentialIndex;
 	}
 
 	/**

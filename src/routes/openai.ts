@@ -149,7 +149,7 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 		const geminiClient = new GeminiApiClient(c.env, authManager);
 
 		// Increment request count
-		await userConfigManager.incrementRequestCount();
+		await userConfigManager.incrementRequestCount(authManager.getCurrentCredentialIndex());
 
 		// Test authentication first
 		try {
