@@ -79,7 +79,8 @@ DebugRoute.get("/stats", async (c) => {
 
 		return c.json({
 			status: "ok",
-			requests_since_last_config_update: userConfig?.requestCount ?? 0
+			total_requests: userConfig?.totalRequests ?? 0,
+			requests_per_credential: userConfig?.requestCounts ?? []
 		});
 	} catch (e: unknown) {
 		const errorMessage = e instanceof Error ? e.message : String(e);

@@ -240,6 +240,9 @@ export class AuthManager {
 			throw new Error(`API call failed with status ${response.status}: ${errorText}`);
 		}
 
+		const userConfigManager = new UserConfigManager(this.env, this.apiKey);
+		await userConfigManager.incrementRequestCount(this.currentCredentialIndex);
+
 		return response.json();
 	}
 
@@ -267,7 +270,12 @@ export class AuthManager {
 		}
 
 		userConfig.currentCredentialIndex = (userConfig.currentCredentialIndex + 1) % activeCredentials.length;
-		console.log(`Rotating credentials. New index: ${userConfig.currentCredentialIndex}`);
+
+		// Reset the request count for the new credential
+		if (!userConfig.requestCounts) {
+			userConfig.requestCounts = [];
+		}
+		userConfig.requestCounts[userConfig.currentCredentialIndex] = 0;
 
 		await userConfigManager.setConfig(userConfig);
 		this.accessToken = null; // Force re-authentication

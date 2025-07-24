@@ -10,6 +10,7 @@
     "build": "wrangler deploy --dry-run --outdir=dist",
     "lint": "eslint --ext .ts src",
     "lint:fix": "eslint --ext .ts src --fix",
+    "test": "jest",
     "docker:build": "docker-compose build",
     "docker:dev": "docker-compose up --build",
     "docker:start": "docker-compose up",
@@ -25,12 +26,15 @@
     "@cloudflare/workers-types": "^4.20250712.0",
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.31.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.13",
     "@typescript-eslint/eslint-plugin": "^8.35.1",
     "@typescript-eslint/parser": "^8.36.0",
     "eslint": "^9.30.1",
     "itty-router-extras": "^0.4.6",
+    "jest": "^30.0.5",
     "prettier": "^3.6.2",
+    "ts-jest": "^29.4.0",
     "typescript": "^5.4.5",
     "wrangler": "^4.24.3"
   }

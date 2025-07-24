@@ -20,19 +20,27 @@ ConfigRoute.post("/config/update", async (c) => {
 	const userConfigManager = new UserConfigManager(c.env, apiKey);
 	let userConfig = await userConfigManager.getConfig();
 
+	const maxCredentials = c.env.MAX_CREDENTIALS || 10;
 	if (!userConfig) {
 		userConfig = {
-			gcpServiceAccounts: new Array(10).fill(null),
+			gcpServiceAccounts: [],
 			currentCredentialIndex: 0,
 			nextWriteIndex: 0,
-			requestCount: 0,
+			requestCounts: [],
+			totalRequests: 0,
 		};
 	}
 
 	const writeIndex = userConfig.nextWriteIndex;
 	const newGcpServiceAccount = JSON.stringify(gcpServiceAccount);
-	userConfig.gcpServiceAccounts[writeIndex] = newGcpServiceAccount;
-	userConfig.nextWriteIndex = (writeIndex + 1) % 10;
+
+	if (writeIndex >= userConfig.gcpServiceAccounts.length) {
+		userConfig.gcpServiceAccounts.push(newGcpServiceAccount);
+	} else {
+		userConfig.gcpServiceAccounts[writeIndex] = newGcpServiceAccount;
+	}
+	
+	userConfig.nextWriteIndex = (writeIndex + 1) % maxCredentials;
 
 	await userConfigManager.setConfig(userConfig);
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Dynamic Credential Limit and Per-Credential Stats
+
+This update enhances the credential management system by introducing a dynamic limit for the number of credentials and providing more detailed statistics.
+
+### New Features
+
+-   **Dynamic Credential Limit**: The hardcoded limit of 10 credentials has been removed. The system now supports a dynamic number of keys, configured via the `MAX_CREDENTIALS` environment variable.
+-   **Per-Credential Stats**: The `/debug/stats` endpoint has been enhanced to provide per-credential request counts. It now shows the total number of requests and a breakdown of requests for each individual credential. The counter for a credential is reset when it's rotated.
+
+---
 ## Automatic Credential Rotation
 
 This update introduces a robust system for rotating Google Cloud OAuth credentials to automatically handle API rate limits and improve reliability.
