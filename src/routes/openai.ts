@@ -148,9 +148,6 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 		const authManager = new AuthManager(c.env, apiKey);
 		const geminiClient = new GeminiApiClient(c.env, authManager);
 
-		// Increment request count
-		await userConfigManager.incrementRequestCount(authManager.getCurrentCredentialIndex());
-
 		// Test authentication first
 		try {
 			await authManager.initializeAuth();
@@ -161,7 +158,10 @@ OpenAIRoute.post("/chat/completions", async (c) => {
 			return c.json({ error: "Authentication failed: " + errorMessage }, 401);
 		}
 
-        try {
+		// Increment request count
+		await userConfigManager.incrementRequestCount(authManager.getCurrentCredentialIndex());
+
+		      try {
             const projectId = await geminiClient.discoverProjectId();
             console.log(`Using Project ID: ${projectId}`);
         } catch (discoveryError: unknown) {
